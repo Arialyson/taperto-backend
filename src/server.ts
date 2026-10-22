@@ -1,19 +1,18 @@
 import express from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
-import './database/db';
+import empresaRoutes from './routes/empresaRoutes';
+import usuarioRoutes from './routes/usuarioRoutes'; // <-- Adicionar esta linha
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.use(cors());
 app.use(express.json());
 
-app.get('/health', (req, res) => {
-  return res.json({ status: 'OK', message: 'API TáPerto rodando perfeitamente!' });
-});
+// Registar Rotas
+app.use('/api', empresaRoutes);
+app.use('/api', usuarioRoutes); // <-- Adicionar esta linha
+
+const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
