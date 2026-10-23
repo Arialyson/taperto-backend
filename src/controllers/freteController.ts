@@ -69,7 +69,7 @@ export const criarFrete = async (req: RequestComUsuario, res: Response) => {
   }
 };
 
-// Listar fretes da empresa com relacionamentos
+// Listar fretes da empresa com filtros dinâmicos e paginação
 export const listarFretes = async (req: RequestComUsuario, res: Response) => {
   const empresa_id = req.usuario?.empresa_id;
 
@@ -77,8 +77,10 @@ export const listarFretes = async (req: RequestComUsuario, res: Response) => {
     return res.status(401).json({ erro: 'Utilizador não autenticado.' });
   }
 
+  const { status, cliente_id, pagina = 1, limite = 10 } = req.query;
+
   try {
-    const query = `
+    let query = `
       SELECT 
         f.*,
         m.nome AS nome_motorista,
@@ -90,12 +92,41 @@ export const listarFretes = async (req: RequestComUsuario, res: Response) => {
       LEFT JOIN veiculos v ON f.veiculo_id = v.id
       LEFT JOIN clientes c ON f.cliente_id = c.id
       WHERE f.empresa_id = $1
-      ORDER BY f.created_at DESC;
     `;
 
-    const result = await pool.query(query, [empresa_id]);
+    const values: any[] = [empresa_id];
+    let paramIndex = 2;
 
-    return res.json(result.rows);
+    // Filtro por status
+    if (status) {
+      query += ` AND f.status = $${paramIndex}`;
+      values.push(status);
+      paramIndex++;
+    }
+
+    // Filtro por cliente
+    if (cliente_id) {
+      query += ` AND f.cliente_id = $${paramIndex}`;
+      values.push(cliente_id);
+      paramIndex++;
+    }
+
+    // Paginação
+    const limitNum = parseInt(limite as string, 10) || 10;
+    const pageNum = parseInt(pagina as string, 10) || 1;
+    const offset = (pageNum - 1) * limitNum;
+
+    query += ` ORDER BY f.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    values.push(limitNum, offset);
+
+    const result = await pool.query(query, values);
+
+    return res.json({
+      pagina: pageNum,
+      limite: limitNum,
+      total_retornado: result.rows.length,
+      dados: result.rows
+    });
   } catch (error: any) {
     return res.status(500).json({ erro: 'Erro ao listar fretes.', detalhe: error.message });
   }
