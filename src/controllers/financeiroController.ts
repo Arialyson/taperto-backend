@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import supabase from '../database/db';
+import { pool } from '../database/db';
 
 export const criarLancamentoFinanceiro = async (req: any, res: Response) => {
   try {
@@ -11,46 +11,39 @@ export const criarLancamentoFinanceiro = async (req: any, res: Response) => {
       return;
     }
 
-    const { data: freteExiste, error: errFrete } = await supabase
-      .from('fretes')
-      .select('id')
-      .eq('id', frete_id)
-      .eq('empresa_id', empresa_id)
-      .single();
+    const freteResult = await pool.query(
+      'SELECT id FROM fretes WHERE id = $1 AND empresa_id = $2',
+      [frete_id, empresa_id]
+    );
 
-    if (errFrete || !freteExiste) {
+    if (freteResult.rowCount === 0) {
       res.status(404).json({ erro: 'Frete não encontrado ou não pertence a esta empresa.' });
       return;
     }
 
-    const { data, error } = await supabase
-      .from('financeiro_fretes')
-      .insert([
-        {
-          empresa_id,
-          frete_id,
-          valor_total,
-          status_pagamento: status_pagamento || 'Pendente',
-          forma_pagamento: forma_pagamento || null,
-          data_vencimento,
-          data_pagamento: data_pagamento || null
-        }
-      ])
-      .select()
-      .single();
+    const insertQuery = `
+      INSERT INTO financeiro_fretes 
+      (empresa_id, frete_id, valor_total, status_pagamento, forma_pagamento, data_vencimento, data_pagamento) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7) 
+      RETURNING *
+    `;
+    
+    const values = [
+      empresa_id, frete_id, valor_total,
+      status_pagamento || 'Pendente',
+      forma_pagamento || null,
+      data_vencimento,
+      data_pagamento || null
+    ];
 
-    if (error) {
-      if (error.code === '23505') {
-        res.status(400).json({ erro: 'Já existe um lançamento financeiro para este frete.' });
-        return;
-      }
-      res.status(500).json({ erro: error.message });
+    const { rows } = await pool.query(insertQuery, values);
+    res.status(201).json(rows[0]);
+    return;
+  } catch (error: any) {
+    if (error.code === '23505') {
+      res.status(400).json({ erro: 'Já existe um lançamento financeiro para este frete.' });
       return;
     }
-
-    res.status(201).json(data);
-    return;
-  } catch (error) {
     res.status(500).json({ erro: 'Erro interno no servidor.' });
     return;
   }
@@ -68,34 +61,44 @@ export const listarFinanceiro = async (req: any, res: Response) => {
 
     const pageNum = Number(pagina);
     const limitNum = Number(limite);
-    const inicio = (pageNum - 1) * limitNum;
-    const fim = inicio + limitNum - 1;
-
-    let query = supabase
-      .from('financeiro_fretes')
-      .select('*, fretes(codigo_rastreio, origem_cidade_uf, destino_cidade_uf)', { count: 'exact' })
-      .eq('empresa_id', empresa_id);
+    const offset = (pageNum - 1) * limitNum;
+    
+    let queryStr = `
+      SELECT ff.*, 
+             json_build_object(
+               'codigo_rastreio', f.codigo_rastreio,
+               'origem_cidade_uf', f.origem_cidade_uf,
+               'destino_cidade_uf', f.destino_cidade_uf
+             ) as fretes
+      FROM financeiro_fretes ff
+      LEFT JOIN fretes f ON ff.frete_id = f.id
+      WHERE ff.empresa_id = $1
+    `;
+    const queryParams: any[] = [empresa_id];
+    let paramIndex = 2;
 
     if (status_pagamento) {
-      query = query.eq('status_pagamento', String(status_pagamento));
+      queryStr += ` AND ff.status_pagamento = $${paramIndex}`;
+      queryParams.push(String(status_pagamento));
+      paramIndex++;
     }
 
-    const { data, error, count } = await query
-      .order('data_vencimento', { ascending: true })
-      .range(inicio, fim);
+    const countQueryStr = `SELECT COUNT(*) FROM (${queryStr}) as total`;
+    const countResult = await pool.query(countQueryStr, queryParams);
+    const totalRegistros = parseInt(countResult.rows[0].count);
 
-    if (error) {
-      res.status(500).json({ erro: error.message });
-      return;
-    }
+    queryStr += ` ORDER BY ff.data_vencimento ASC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    queryParams.push(limitNum, offset);
+
+    const { rows } = await pool.query(queryStr, queryParams);
 
     res.status(200).json({
-      dados: data,
+      dados: rows,
       paginacao: {
         pagina: pageNum,
         limite: limitNum,
-        total_registros: count,
-        total_paginas: count ? Math.ceil(count / limitNum) : 0
+        total_registros: totalRegistros,
+        total_paginas: Math.ceil(totalRegistros / limitNum)
       }
     });
     return;
@@ -116,25 +119,27 @@ export const atualizarStatusFinanceiro = async (req: any, res: Response) => {
       return;
     }
 
-    const { data, error } = await supabase
-      .from('financeiro_fretes')
-      .update({
-        status_pagamento,
-        forma_pagamento: forma_pagamento || null,
-        data_pagamento: status_pagamento === 'Pago' ? (data_pagamento || new Date().toISOString().split('T')[0]) : null,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id)
-      .eq('empresa_id', empresa_id)
-      .select()
-      .single();
+    const dataPag = status_pagamento === 'Pago' ? (data_pagamento || new Date().toISOString().split('T')[0]) : null;
 
-    if (error || !data) {
+    const updateQuery = `
+      UPDATE financeiro_fretes 
+      SET status_pagamento = $1, 
+          forma_pagamento = COALESCE($2, forma_pagamento), 
+          data_pagamento = $3, 
+          updated_at = NOW() 
+      WHERE id = $4 AND empresa_id = $5 
+      RETURNING *
+    `;
+
+    const values = [status_pagamento, forma_pagamento || null, dataPag, id, empresa_id];
+    const result = await pool.query(updateQuery, values);
+
+    if (result.rowCount === 0 || result.rowCount === null) {
       res.status(404).json({ erro: 'Lançamento financeiro não encontrado.' });
       return;
     }
 
-    res.status(200).json(data);
+    res.status(200).json(result.rows[0]);
     return;
   } catch (error) {
     res.status(500).json({ erro: 'Erro interno no servidor.' });
