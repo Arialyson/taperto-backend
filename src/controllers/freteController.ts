@@ -45,8 +45,15 @@ export const criarFrete = async (req: RequestComUsuario, res: Response) => {
     ];
 
     const result = await pool.query(query, values);
+    const novoFrete = result.rows[0];
 
-    return res.status(201).json(result.rows[0]);
+    // Registar evento inicial no histórico
+    await pool.query(
+      `INSERT INTO historico_fretes (frete_id, status, descricao) VALUES ($1, $2, $3)`,
+      [novoFrete.id, novoFrete.status || 'Aguardando Coleta', 'Frete registado no sistema.']
+    );
+
+    return res.status(201).json(novoFrete);
   } catch (error: any) {
     return res.status(500).json({ erro: 'Erro ao criar frete.', detalhe: error.message });
   }
@@ -82,10 +89,10 @@ export const listarFretes = async (req: RequestComUsuario, res: Response) => {
   }
 };
 
-// Atualizar o status de um frete (Protegido por JWT)
+// Atualizar o status de um frete e registar no histórico
 export const atualizarStatusFrete = async (req: RequestComUsuario, res: Response) => {
   const { id } = req.params;
-  const { status } = req.body;
+  const { status, descricao, localizacao } = req.body;
   const empresa_id = req.usuario?.empresa_id;
 
   if (!empresa_id) {
@@ -110,13 +117,19 @@ export const atualizarStatusFrete = async (req: RequestComUsuario, res: Response
       return res.status(404).json({ erro: 'Frete não encontrado ou sem permissão para alterar.' });
     }
 
+    // Registar evento no histórico
+    await pool.query(
+      `INSERT INTO historico_fretes (frete_id, status, descricao, localizacao) VALUES ($1, $2, $3, $4)`,
+      [id, status, descricao || null, localizacao || null]
+    );
+
     return res.json(result.rows[0]);
   } catch (error: any) {
     return res.status(500).json({ erro: 'Erro ao atualizar status do frete.', detalhe: error.message });
   }
 };
 
-// Rastreio Público do Frete (Sem necessidade de autenticação/Token)
+// Rastreio Público do Frete com Linha do Tempo (Sem Token)
 export const rastrearFretePublico = async (req: Request, res: Response) => {
   const { codigo } = req.params;
 
@@ -125,8 +138,9 @@ export const rastrearFretePublico = async (req: Request, res: Response) => {
   }
 
   try {
-    const query = `
+    const queryFrete = `
       SELECT 
+        id,
         codigo_rastreio,
         origem_cidade_uf,
         destino_cidade_uf,
@@ -136,13 +150,28 @@ export const rastrearFretePublico = async (req: Request, res: Response) => {
       WHERE codigo_rastreio = $1;
     `;
 
-    const result = await pool.query(query, [(codigo as string).toUpperCase()]);
+    const resultFrete = await pool.query(queryFrete, [(codigo as string).toUpperCase()]);
 
-    if (result.rows.length === 0) {
+    if (resultFrete.rows.length === 0) {
       return res.status(404).json({ erro: 'Código de rastreio inválido ou não encontrado.' });
     }
 
-    return res.json(result.rows[0]);
+    const frete = resultFrete.rows[0];
+
+    // Buscar histórico de eventos em ordem cronológica
+    const queryHistorico = `
+      SELECT status, descricao, localizacao, created_at
+      FROM historico_fretes
+      WHERE frete_id = $1
+      ORDER BY created_at ASC;
+    `;
+
+    const resultHistorico = await pool.query(queryHistorico, [frete.id]);
+
+    return res.json({
+      ...frete,
+      historico: resultHistorico.rows
+    });
   } catch (error: any) {
     return res.status(500).json({ erro: 'Erro ao consultar rastreio.', detalhe: error.message });
   }
