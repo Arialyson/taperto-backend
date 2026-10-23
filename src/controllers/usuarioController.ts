@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
+import bcrypt from 'bcryptjs';
 import { pool } from '../database/db';
 
-// Criar um novo utilizador vinculado a uma empresa
+// Criar um novo utilizador vinculado a uma empresa (com senha criptografada)
 export const criarUsuario = async (req: Request, res: Response) => {
   const { empresa_id, nome, email, senha, cargo } = req.body;
 
@@ -10,12 +11,17 @@ export const criarUsuario = async (req: Request, res: Response) => {
   }
 
   try {
+    // 1. Gerar a hash da senha usando bcrypt (10 rodadas de salt)
+    const saltRounds = 10;
+    const senhaHash = await bcrypt.hash(senha, saltRounds);
+
+    // 2. Salvar no banco usando a senhaHash em vez da senha em texto puro
     const query = `
       INSERT INTO usuarios (empresa_id, nome, email, senha, cargo)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING id, empresa_id, nome, email, cargo, ativo, created_at;
     `;
-    const values = [empresa_id, nome, email, senha, cargo || 'OPERADOR'];
+    const values = [empresa_id, nome, email, senhaHash, cargo || 'OPERADOR'];
     const result = await pool.query(query, values);
 
     return res.status(201).json(result.rows[0]);
@@ -30,7 +36,7 @@ export const criarUsuario = async (req: Request, res: Response) => {
   }
 };
 
-// Listar todos os utilizadores de uma empresa específica (Multi-tenant filter)
+// Listar todos os utilizadores de uma empresa específica
 export const listarUsuariosPorEmpresa = async (req: Request, res: Response) => {
   const { empresa_id } = req.params;
 
