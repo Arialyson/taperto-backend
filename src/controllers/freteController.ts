@@ -10,7 +10,16 @@ const gerarCodigoRastreio = (): string => {
 
 // Criar um novo frete
 export const criarFrete = async (req: RequestComUsuario, res: Response) => {
-  const { motorista_id, veiculo_id, origem_cidade_uf, destino_cidade_uf, nota_fiscal, valor_frete } = req.body;
+  const { 
+    motorista_id, 
+    veiculo_id, 
+    cliente_id, 
+    origem_cidade_uf, 
+    destino_cidade_uf, 
+    nota_fiscal, 
+    valor_frete 
+  } = req.body;
+
   const empresa_id = req.usuario?.empresa_id;
 
   if (!empresa_id) {
@@ -26,10 +35,10 @@ export const criarFrete = async (req: RequestComUsuario, res: Response) => {
 
     const query = `
       INSERT INTO fretes (
-        empresa_id, motorista_id, veiculo_id, codigo_rastreio,
+        empresa_id, motorista_id, veiculo_id, cliente_id, codigo_rastreio,
         origem_cidade_uf, destino_cidade_uf, nota_fiscal, valor_frete
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *;
     `;
 
@@ -37,6 +46,7 @@ export const criarFrete = async (req: RequestComUsuario, res: Response) => {
       empresa_id,
       motorista_id || null,
       veiculo_id || null,
+      cliente_id || null,
       codigo_rastreio,
       origem_cidade_uf,
       destino_cidade_uf,
@@ -59,7 +69,7 @@ export const criarFrete = async (req: RequestComUsuario, res: Response) => {
   }
 };
 
-// Listar fretes da empresa do utilizador
+// Listar fretes da empresa com relacionamentos
 export const listarFretes = async (req: RequestComUsuario, res: Response) => {
   const empresa_id = req.usuario?.empresa_id;
 
@@ -73,10 +83,12 @@ export const listarFretes = async (req: RequestComUsuario, res: Response) => {
         f.*,
         m.nome AS nome_motorista,
         v.placa AS placa_veiculo,
-        v.modelo AS modelo_veiculo
+        v.modelo AS modelo_veiculo,
+        c.nome_razasocial AS cliente_nome
       FROM fretes f
       LEFT JOIN motoristas m ON f.motorista_id = m.id
       LEFT JOIN veiculos v ON f.veiculo_id = v.id
+      LEFT JOIN clientes c ON f.cliente_id = c.id
       WHERE f.empresa_id = $1
       ORDER BY f.created_at DESC;
     `;
