@@ -6,6 +6,7 @@ import authRoutes from './routes/authRoutes';
 import veiculoRoutes from './routes/veiculoRoutes';
 import motoristaRoutes from './routes/motoristaRoutes';
 import freteRoutes from './routes/freteRoutes';
+import dashboardRoutes from './routes/dashboardRoutes';
 
 dotenv.config();
 
@@ -19,6 +20,7 @@ app.use('/api', authRoutes);
 app.use('/api', veiculoRoutes);
 app.use('/api', motoristaRoutes);
 app.use('/api', freteRoutes);
+app.use('/api', dashboardRoutes);
 
 const PORT = process.env.PORT || 3000;
 
