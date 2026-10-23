@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import empresaRoutes from './routes/empresaRoutes';
 import usuarioRoutes from './routes/usuarioRoutes';
 import authRoutes from './routes/authRoutes';
+import veiculoRoutes from './routes/veiculoRoutes';
 
 dotenv.config();
 
@@ -13,6 +14,7 @@ app.use(express.json());
 app.use('/api', empresaRoutes);
 app.use('/api', usuarioRoutes);
 app.use('/api', authRoutes);
+app.use('/api', veiculoRoutes);
 
 const PORT = process.env.PORT || 3000;
 

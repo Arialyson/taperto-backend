@@ -1,0 +1,29 @@
+[33mcommit c57c750512e487720aa0b555c8bfd9667fa031e3[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m
+Author: Arialyson Lima <arialyson@gmail.com>
+Date:   Fri Oct 23 08:54:37 2026 -0300
+
+    feat: implementa autenticacao com JWT e middleware de protecao de rotas
+
+[33mcommit d439426176032efde6dc5d1748cfe057b05234d2[m
+Author: Arialyson Lima <arialyson@gmail.com>
+Date:   Thu Oct 22 20:15:57 2026 -0300
+
+    feat: conclui CRUD de empresas e implementa modulo de usiarios multi-tenant
+
+[33mcommit 09f393c3340178ee2a162e3583490dca4bd398de[m
+Author: Arialyson Lima <arialyson@gmail.com>
+Date:   Thu Oct 22 18:57:14 2026 -0300
+
+    fix: remover node_modules e env do rastreio do git
+
+[33mcommit ba5ae6048d1e9481741b306c1ae19ee4364960f6[m
+Author: Arialyson Lima <arialyson@gmail.com>
+Date:   Thu Oct 22 18:48:38 2026 -0300
+
+    feat: integração com supabase postgresql e configuração de variaveis de ambiente
+
+[33mcommit b70c65af415e6883d2bea4859c4ddb10d7c26cda[m
+Author: Arialyson Lima <arialyson@gmail.com>
+Date:   Thu Oct 22 17:48:57 2026 -0300
+
+    feat: initial commit with README and gitignore
