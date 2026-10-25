@@ -1,42 +1,34 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-// Interface para definir a estrutura do payload guardado no JWT
-export interface UsuarioPayload {
+export interface TokenPayload {
   id: string;
   empresa_id: string;
-  cargo: string;
-  nome: string;
+  email: string;
+  cargo?: string;
+  role?: string;
 }
 
-// Extensão do tipo Request do Express para incluir o utilizador autenticado
 export interface RequestComUsuario extends Request {
-  usuario?: UsuarioPayload;
+  usuario?: TokenPayload;
 }
 
-export const autenticarToken = (
-  req: RequestComUsuario,
-  res: Response,
-  next: NextFunction
-) => {
-  // O token vem no cabeçalho Authorization no formato "Bearer TOKEN"
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+export const autenticar = (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers.authorization;
 
-  if (!token) {
-    return res.status(401).json({ erro: 'Acesso negado. Token não fornecido.' });
+  if (!authHeader) {
+    return res.status(401).json({ erro: 'Token não fornecido.' });
   }
 
+  const token = authHeader.replace(/^Bearer\s+/i, '').replace(/^"|"$/g, '').trim();
+
   try {
-    const jwtSecret = process.env.JWT_SECRET || 'secreto_fallback';
-    const decoded = jwt.verify(token, jwtSecret) as UsuarioPayload;
+    const secret = process.env.JWT_SECRET || 'secret_key_padrao';
+    const decoded = jwt.verify(token, secret) as TokenPayload;
 
-    // Anexa os dados do utilizador autenticado no objeto da requisição
-    req.usuario = decoded;
-
-    // Autoriza a requisição a prosseguir para a rota/controlador
+    (req as RequestComUsuario).usuario = decoded;
     return next();
-  } catch (error) {
+  } catch (error: any) {
     return res.status(403).json({ erro: 'Token inválido ou expirado.' });
   }
 };

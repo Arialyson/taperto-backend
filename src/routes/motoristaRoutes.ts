@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import { criarMotorista, listarMotoristas } from '../controllers/motoristaController';
-import { autenticarToken } from '../middlewares/authMiddleware';
+import { autenticar } from '../middlewares/authMiddleware';
 
 const router = Router();
 
-// Rotas protegidas pelo middleware de autenticação JWT
-router.post('/motoristas', autenticarToken, criarMotorista);
-router.get('/motoristas', autenticarToken, listarMotoristas);
+// Aplica o middleware de autenticação JWT a todas as rotas do módulo
+router.use(autenticar);
+
+router.post('/', criarMotorista);
+router.get('/', listarMotoristas);
 
 export default router;

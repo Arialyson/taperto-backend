@@ -2,73 +2,54 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { pool } from '../database/db';
-import { RequestComUsuario } from '../middlewares/authMiddleware';
 
 export const login = async (req: Request, res: Response) => {
-  const { email, senha } = req.body;
-
-  if (!email || !senha) {
-    return res.status(400).json({ erro: 'E-mail e senha são obrigatórios.' });
-  }
-
   try {
-    // 1. Procurar o utilizador pelo e-mail
-    const result = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
+    const { email, senha } = req.body;
 
-    if (result.rows.length === 0) {
+    console.log('🔍 [DEBUG LOGIN] E-mail buscado:', email);
+
+    const result = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
+    console.log('🔍 [DEBUG LOGIN] Registos encontrados:', result.rowCount);
+
+    if (result.rowCount === 0) {
       return res.status(401).json({ erro: 'Credenciais inválidas.' });
     }
 
     const usuario = result.rows[0];
+    console.log('🔍 [DEBUG LOGIN] Senha no banco:', usuario.senha);
 
-    // Verificar se o utilizador está ativo
-    if (!usuario.ativo) {
-      return res.status(403).json({ erro: 'Utilizador inativo no sistema.' });
-    }
-
-    // 2. Comparar a senha enviada com a hash guardada no banco
     const senhaValida = await bcrypt.compare(senha, usuario.senha);
+    console.log('🔍 [DEBUG LOGIN] Senha válida?:', senhaValida);
 
     if (!senhaValida) {
       return res.status(401).json({ erro: 'Credenciais inválidas.' });
     }
 
-    // 3. Gerar o Token JWT com os dados de identificação e empresa
-    const jwtSecret = process.env.JWT_SECRET || 'secreto_fallback';
-    
+    const secret = process.env.JWT_SECRET || 'secret_key_padrao';
     const token = jwt.sign(
       {
         id: usuario.id,
         empresa_id: usuario.empresa_id,
+        email: usuario.email,
         cargo: usuario.cargo,
-        nome: usuario.nome
+        role: usuario.role
       },
-      jwtSecret,
-      { expiresIn: '1d' }
+      secret,
+      { expiresIn: '8h' }
     );
 
-    // 4. Retornar os dados e o token
-    return res.json({
-      mensagem: 'Login realizado com sucesso!',
+    return res.status(200).json({
       token,
       usuario: {
         id: usuario.id,
-        empresa_id: usuario.empresa_id,
         nome: usuario.nome,
         email: usuario.email,
-        cargo: usuario.cargo
+        empresa_id: usuario.empresa_id
       }
     });
-
-  } catch (error: any) {
-    return res.status(500).json({ erro: 'Erro ao realizar login.', detalhe: error.message });
+  } catch (error) {
+    console.error('Erro no login:', error);
+    return res.status(500).json({ erro: 'Erro interno do servidor.' });
   }
-};
-
-// Rota protegida: Retorna os dados do utilizador atualmente autenticado via Token
-export const obterPerfil = async (req: RequestComUsuario, res: Response) => {
-  return res.json({
-    mensagem: 'Acesso autorizado!',
-    usuarioAutenticado: req.usuario
-  });
 };

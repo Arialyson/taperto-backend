@@ -1,13 +1,8 @@
 import { Router } from 'express';
-import { login, obterPerfil } from '../controllers/authController';
-import { autenticarToken } from '../middlewares/authMiddleware';
+import { login } from '../controllers/authController';
 
 const router = Router();
 
-// Rota pública de login
-router.post('/auth/login', login);
-
-// Rota protegida (requer Token JWT no cabeçalho)
-router.get('/auth/me', autenticarToken, obterPerfil);
+router.post('/login', login);
 
 export default router;
