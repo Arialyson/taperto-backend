@@ -53,6 +53,28 @@ export const criarFrete = async (req: RequestComUsuario, res: Response) => {
     return res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Erro ao criar frete:', error);
-    return res.status(500).json({ mensagem: 'Erro interno do servidor.' });
+    return res.status(500).json({ erro: 'Erro interno do servidor.' });
+  }
+};
+
+export const listarFretes = async (req: RequestComUsuario, res: Response) => {
+  try {
+    const usuario = req.usuario;
+
+    if (!usuario) {
+      return res.status(401).json({ erro: 'Utilizador não autenticado.' });
+    }
+
+    const query = `
+      SELECT * FROM fretes 
+      WHERE empresa_id = $1 
+      ORDER BY created_at DESC
+    `;
+
+    const result = await pool.query(query, [usuario.empresa_id]);
+    return res.status(200).json(result.rows);
+  } catch (error) {
+    console.error('Erro ao listar fretes:', error);
+    return res.status(500).json({ erro: 'Erro interno do servidor.' });
   }
 };

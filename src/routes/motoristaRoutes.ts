@@ -4,7 +4,7 @@ import { autenticar } from '../middlewares/authMiddleware';
 
 const router = Router();
 
-// Aplica o middleware de autenticação JWT a todas as rotas do módulo
+// Aplica o middleware de autenticação JWT em todas as rotas do módulo
 router.use(autenticar);
 
 router.post('/', criarMotorista);

@@ -3,6 +3,8 @@ import dotenv from 'dotenv';
 import { login } from './controllers/authController';
 import financeiroRoutes from './routes/financeiroRoutes';
 import freteRoutes from './routes/freteRoutes';
+import motoristaRoutes from './routes/motoristaRoutes';
+import veiculoRoutes from './routes/veiculoRoutes';
 
 dotenv.config();
 
@@ -13,9 +15,11 @@ app.use(express.json());
 // Rota de Autenticação
 app.post('/api/login', login);
 
-// Rotas dos Módulos
+// Rotas da API
 app.use('/api/financeiro', financeiroRoutes);
 app.use('/api/fretes', freteRoutes);
+app.use('/api/motoristas', motoristaRoutes);
+app.use('/api/veiculos', veiculoRoutes);
 
 const PORT = process.env.PORT || 3000;
 
