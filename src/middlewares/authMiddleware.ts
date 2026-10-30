@@ -1,34 +1,25 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-export interface TokenPayload {
-  id: string;
-  empresa_id: string;
-  email: string;
-  cargo?: string;
-  role?: string;
+export interface AuthRequest extends Request {
+  empresaId?: string;
 }
 
-export interface RequestComUsuario extends Request {
-  usuario?: TokenPayload;
-}
+export const autenticarToken = (req: AuthRequest, res: Response, next: NextFunction) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Extrai o token após "Bearer "
 
-export const autenticar = (req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader) {
-    return res.status(401).json({ erro: 'Token não fornecido.' });
+  if (!token) {
+    return res.status(401).json({ erro: 'Acesso negado. Token não fornecido.' });
   }
-
-  const token = authHeader.replace(/^Bearer\s+/i, '').replace(/^"|"$/g, '').trim();
 
   try {
     const secret = process.env.JWT_SECRET || 'secret_key_padrao';
-    const decoded = jwt.verify(token, secret) as TokenPayload;
+    const decoded = jwt.verify(token, secret) as { id: string; empresa_id: string };
 
-    (req as RequestComUsuario).usuario = decoded;
+    req.empresaId = decoded.empresa_id || decoded.id;
     return next();
-  } catch (error: any) {
+  } catch (error) {
     return res.status(403).json({ erro: 'Token inválido ou expirado.' });
   }
 };

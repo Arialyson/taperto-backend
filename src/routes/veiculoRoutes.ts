@@ -1,19 +1,19 @@
 import { Router } from 'express';
-import { 
-  criarVeiculo, 
-  listarVeiculos, 
-  obterVeiculoPorId, 
-  atualizarVeiculo, 
-  deletarVeiculo 
+import { autenticarToken } from '../middlewares/authMiddleware';
+import {
+  listarVeiculos,
+  criarVeiculo,
+  obterVeiculoPorId,
+  atualizarVeiculo,
+  deletarVeiculo,
 } from '../controllers/veiculoController';
-import { autenticar } from '../middlewares/authMiddleware';
 
 const router = Router();
 
-router.use(autenticar);
+router.use(autenticarToken);
 
-router.post('/', criarVeiculo);
 router.get('/', listarVeiculos);
+router.post('/', criarVeiculo);
 router.get('/:id', obterVeiculoPorId);
 router.put('/:id', atualizarVeiculo);
 router.delete('/:id', deletarVeiculo);
