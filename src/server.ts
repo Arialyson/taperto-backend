@@ -34,7 +34,36 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
   }
 }
 
-// Rotas de Autenticação
+// --- ROTA PÚBLICA DE RASTREIO ---
+
+app.get('/api/rastreio/:codigo', async (req: Request, res: Response) => {
+  const codigoParam = String(req.params.codigo);
+
+  const frete = await prisma.frete.findFirst({
+    where: { codigo: codigoParam.toUpperCase() },
+    select: {
+      codigo: true,
+      origem: true,
+      destino: true,
+      status: true,
+      dataCriacao: true,
+      user: {
+        select: {
+          empresa: true
+        }
+      }
+    }
+  });
+
+  if (!frete) {
+    return res.status(404).json({ error: 'Frete não encontrado. Verifique o código digitado.' });
+  }
+
+  return res.json(frete);
+});
+
+// --- ROTAS DE AUTENTICAÇÃO ---
+
 app.post('/api/auth/register', async (req: Request, res: Response) => {
   const { nome, empresa, email, senha } = req.body;
 
@@ -42,18 +71,18 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Preencha todos os campos obrigatórios.' });
   }
 
-  const userExists = await prisma.user.findUnique({ where: { email } });
+  const userExists = await prisma.user.findUnique({ where: { email: String(email) } });
   if (userExists) {
     return res.status(400).json({ error: 'Este e-mail já está em uso.' });
   }
 
-  const senhaHash = await bcrypt.hash(senha, 8);
+  const senhaHash = await bcrypt.hash(String(senha), 8);
 
   const newUser = await prisma.user.create({
     data: {
-      nome,
-      empresa: empresa || 'Não informada',
-      email,
+      nome: String(nome),
+      empresa: empresa ? String(empresa) : 'Não informada',
+      email: String(email),
       senhaHash
     }
   });
@@ -70,12 +99,12 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
 app.post('/api/auth/login', async (req: Request, res: Response) => {
   const { email, senha } = req.body;
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({ where: { email: String(email) } });
   if (!user) {
     return res.status(401).json({ error: 'E-mail ou palavra-passe incorretos.' });
   }
 
-  const isPasswordValid = await bcrypt.compare(senha, user.senhaHash);
+  const isPasswordValid = await bcrypt.compare(String(senha), user.senhaHash);
   if (!isPasswordValid) {
     return res.status(401).json({ error: 'E-mail ou palavra-passe incorretos.' });
   }
@@ -90,7 +119,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 
 app.get('/api/auth/me', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const user = await prisma.user.findUnique({
-    where: { id: req.userId },
+    where: { id: String(req.userId) },
     select: { id: true, nome: true, empresa: true, email: true }
   });
 
@@ -101,10 +130,11 @@ app.get('/api/auth/me', authMiddleware, async (req: AuthenticatedRequest, res: R
   return res.json({ user });
 });
 
-// Rotas de Fretes
+// --- ROTAS DE FRETES ---
+
 app.get('/api/fretes', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const userFretes = await prisma.frete.findMany({
-    where: { userId: req.userId }
+    where: { userId: String(req.userId) }
   });
   return res.json(userFretes);
 });
@@ -118,10 +148,10 @@ app.post('/api/fretes', authMiddleware, async (req: AuthenticatedRequest, res: R
 
   const newFrete = await prisma.frete.create({
     data: {
-      userId: req.userId!,
+      userId: String(req.userId),
       codigo: `FRT-${Math.floor(1000 + Math.random() * 9000)}`,
-      origem,
-      destino,
+      origem: String(origem),
+      destino: String(destino),
       status: 'Pendente',
       valor: Number(valor),
       dataCriacao: new Date().toLocaleDateString('pt-PT')
@@ -131,10 +161,54 @@ app.post('/api/fretes', authMiddleware, async (req: AuthenticatedRequest, res: R
   return res.status(201).json(newFrete);
 });
 
-// Rotas de Motoristas
+app.put('/api/fretes/:id', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  const idParam = String(req.params.id);
+  const { origem, destino, valor, status } = req.body;
+
+  const freteExists = await prisma.frete.findFirst({
+    where: { id: idParam, userId: String(req.userId) }
+  });
+
+  if (!freteExists) {
+    return res.status(404).json({ error: 'Frete não encontrado.' });
+  }
+
+  const updatedFrete = await prisma.frete.update({
+    where: { id: idParam },
+    data: {
+      origem: String(origem),
+      destino: String(destino),
+      valor: Number(valor),
+      status: String(status)
+    }
+  });
+
+  return res.json(updatedFrete);
+});
+
+app.delete('/api/fretes/:id', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  const idParam = String(req.params.id);
+
+  const freteExists = await prisma.frete.findFirst({
+    where: { id: idParam, userId: String(req.userId) }
+  });
+
+  if (!freteExists) {
+    return res.status(404).json({ error: 'Frete não encontrado.' });
+  }
+
+  await prisma.frete.delete({
+    where: { id: idParam }
+  });
+
+  return res.status(204).send();
+});
+
+// --- ROTAS DE MOTORISTAS ---
+
 app.get('/api/motoristas', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const userMotoristas = await prisma.motorista.findMany({
-    where: { userId: req.userId }
+    where: { userId: String(req.userId) }
   });
   return res.json(userMotoristas);
 });
@@ -148,21 +222,65 @@ app.post('/api/motoristas', authMiddleware, async (req: AuthenticatedRequest, re
 
   const newMotorista = await prisma.motorista.create({
     data: {
-      userId: req.userId!,
-      nome,
-      cpf,
-      telefone,
-      cnh
+      userId: String(req.userId),
+      nome: String(nome),
+      cpf: String(cpf),
+      telefone: String(telefone),
+      cnh: String(cnh)
     }
   });
 
   return res.status(201).json(newMotorista);
 });
 
-// Rotas de Veículos
+app.put('/api/motoristas/:id', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  const idParam = String(req.params.id);
+  const { nome, cpf, telefone, cnh } = req.body;
+
+  const motoristaExists = await prisma.motorista.findFirst({
+    where: { id: idParam, userId: String(req.userId) }
+  });
+
+  if (!motoristaExists) {
+    return res.status(404).json({ error: 'Motorista não encontrado.' });
+  }
+
+  const updatedMotorista = await prisma.motorista.update({
+    where: { id: idParam },
+    data: {
+      nome: String(nome),
+      cpf: String(cpf),
+      telefone: String(telefone),
+      cnh: String(cnh)
+    }
+  });
+
+  return res.json(updatedMotorista);
+});
+
+app.delete('/api/motoristas/:id', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  const idParam = String(req.params.id);
+
+  const motoristaExists = await prisma.motorista.findFirst({
+    where: { id: idParam, userId: String(req.userId) }
+  });
+
+  if (!motoristaExists) {
+    return res.status(404).json({ error: 'Motorista não encontrado.' });
+  }
+
+  await prisma.motorista.delete({
+    where: { id: idParam }
+  });
+
+  return res.status(204).send();
+});
+
+// --- ROTAS DE VEÍCULOS ---
+
 app.get('/api/veiculos', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const userVeiculos = await prisma.veiculo.findMany({
-    where: { userId: req.userId }
+    where: { userId: String(req.userId) }
   });
   return res.json(userVeiculos);
 });
@@ -176,15 +294,58 @@ app.post('/api/veiculos', authMiddleware, async (req: AuthenticatedRequest, res:
 
   const newVeiculo = await prisma.veiculo.create({
     data: {
-      userId: req.userId!,
-      placa: placa.toUpperCase(),
-      modelo,
-      capacidade,
+      userId: String(req.userId),
+      placa: String(placa).toUpperCase(),
+      modelo: String(modelo),
+      capacidade: String(capacidade),
       status: 'Disponível'
     }
   });
 
   return res.status(201).json(newVeiculo);
+});
+
+app.put('/api/veiculos/:id', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  const idParam = String(req.params.id);
+  const { placa, modelo, capacidade, status } = req.body;
+
+  const veiculoExists = await prisma.veiculo.findFirst({
+    where: { id: idParam, userId: String(req.userId) }
+  });
+
+  if (!veiculoExists) {
+    return res.status(404).json({ error: 'Veículo não encontrado.' });
+  }
+
+  const updatedVeiculo = await prisma.veiculo.update({
+    where: { id: idParam },
+    data: {
+      placa: String(placa).toUpperCase(),
+      modelo: String(modelo),
+      capacidade: String(capacidade),
+      status: String(status)
+    }
+  });
+
+  return res.json(updatedVeiculo);
+});
+
+app.delete('/api/veiculos/:id', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  const idParam = String(req.params.id);
+
+  const veiculoExists = await prisma.veiculo.findFirst({
+    where: { id: idParam, userId: String(req.userId) }
+  });
+
+  if (!veiculoExists) {
+    return res.status(404).json({ error: 'Veículo não encontrado.' });
+  }
+
+  await prisma.veiculo.delete({
+    where: { id: idParam }
+  });
+
+  return res.status(204).send();
 });
 
 const PORT = 3333;
