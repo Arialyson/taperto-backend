@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import dotenv from 'dotenv';
 import empresaRoutes from './routes/empresaRoutes';
 import freteRoutes from './routes/freteRoutes';
@@ -10,6 +11,8 @@ dotenv.config();
 
 const app = express();
 
+// Habilita requisições cross-origin para o frontend
+app.use(cors());
 app.use(express.json());
 
 // Mapeamento das rotas da API
