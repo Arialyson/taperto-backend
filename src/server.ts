@@ -34,6 +34,35 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
   }
 }
 
+// --- ROTA DE ESTATÍSTICAS DO DASHBOARD ---
+
+app.get('/api/dashboard/stats', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  const userId = String(req.userId);
+
+  const [totalFretes, totalMotoristas, totalVeiculos, fretes] = await Promise.all([
+    prisma.frete.count({ where: { userId } }),
+    prisma.motorista.count({ where: { userId } }),
+    prisma.veiculo.count({ where: { userId } }),
+    prisma.frete.findMany({ where: { userId } })
+  ]);
+
+  const faturamentoTotal = fretes.reduce((acc, f) => acc + f.valor, 0);
+  const fretesEmTransito = fretes.filter(f => f.status === 'Em Trânsito').length;
+  const fretesEntregues = fretes.filter(f => f.status === 'Entregue').length;
+  const fretesPendentes = fretes.filter(f => f.status === 'Pendente').length;
+
+  return res.json({
+    totalFretes,
+    totalMotoristas,
+    totalVeiculos,
+    faturamentoTotal,
+    fretesEmTransito,
+    fretesEntregues,
+    fretesPendentes,
+    ultimosFretes: fretes.slice(-5).reverse()
+  });
+});
+
 // --- ROTA PÚBLICA DE RASTREIO ---
 
 app.get('/api/rastreio/:codigo', async (req: Request, res: Response) => {
@@ -101,12 +130,12 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 
   const user = await prisma.user.findUnique({ where: { email: String(email) } });
   if (!user) {
-    return res.status(401).json({ error: 'E-mail ou palavra-passe incorretos.' });
+    return res.status(401).json({ error: 'E-mail ou senha incorretos.' });
   }
 
   const isPasswordValid = await bcrypt.compare(String(senha), user.senhaHash);
   if (!isPasswordValid) {
-    return res.status(401).json({ error: 'E-mail ou palavra-passe incorretos.' });
+    return res.status(401).json({ error: 'E-mail ou senha incorretos.' });
   }
 
   const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
@@ -124,7 +153,7 @@ app.get('/api/auth/me', authMiddleware, async (req: AuthenticatedRequest, res: R
   });
 
   if (!user) {
-    return res.status(404).json({ error: 'Utilizador não encontrado.' });
+    return res.status(404).json({ error: 'Usuário não encontrado.' });
   }
 
   return res.json({ user });
@@ -154,7 +183,7 @@ app.post('/api/fretes', authMiddleware, async (req: AuthenticatedRequest, res: R
       destino: String(destino),
       status: 'Pendente',
       valor: Number(valor),
-      dataCriacao: new Date().toLocaleDateString('pt-PT')
+      dataCriacao: new Date().toLocaleDateString('pt-BR')
     }
   });
 
