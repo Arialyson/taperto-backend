@@ -7,20 +7,24 @@ export const login = async (req: Request, res: Response) => {
   try {
     const { email, senha } = req.body;
 
-    console.log('🔍 [DEBUG LOGIN] E-mail buscado:', email);
+    if (!email || !senha) {
+      return res.status(400).json({ erro: 'E-mail e senha são obrigatórios.' });
+    }
 
-    const result = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
-    console.log('🔍 [DEBUG LOGIN] Registos encontrados:', result.rowCount);
+    const result = await pool.query('SELECT * FROM empresas WHERE email = $1', [email]);
 
     if (result.rowCount === 0) {
       return res.status(401).json({ erro: 'Credenciais inválidas.' });
     }
 
-    const usuario = result.rows[0];
-    console.log('🔍 [DEBUG LOGIN] Senha no banco:', usuario.senha);
+    const empresa = result.rows[0];
+    const senhaBanco = empresa.senha_hash || empresa.senha;
 
-    const senhaValida = await bcrypt.compare(senha, usuario.senha);
-    console.log('🔍 [DEBUG LOGIN] Senha válida?:', senhaValida);
+    if (!senhaBanco) {
+      return res.status(401).json({ erro: 'Credenciais inválidas.' });
+    }
+
+    const senhaValida = await bcrypt.compare(senha, senhaBanco);
 
     if (!senhaValida) {
       return res.status(401).json({ erro: 'Credenciais inválidas.' });
@@ -29,11 +33,10 @@ export const login = async (req: Request, res: Response) => {
     const secret = process.env.JWT_SECRET || 'secret_key_padrao';
     const token = jwt.sign(
       {
-        id: usuario.id,
-        empresa_id: usuario.empresa_id,
-        email: usuario.email,
-        cargo: usuario.cargo,
-        role: usuario.role
+        id: empresa.id,
+        empresa_id: empresa.id,
+        email: empresa.email,
+        nome: empresa.nome
       },
       secret,
       { expiresIn: '8h' }
@@ -41,11 +44,10 @@ export const login = async (req: Request, res: Response) => {
 
     return res.status(200).json({
       token,
-      usuario: {
-        id: usuario.id,
-        nome: usuario.nome,
-        email: usuario.email,
-        empresa_id: usuario.empresa_id
+      empresa: {
+        id: empresa.id,
+        nome: empresa.nome,
+        email: empresa.email
       }
     });
   } catch (error) {

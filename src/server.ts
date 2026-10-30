@@ -1,10 +1,9 @@
 import express from 'express';
 import dotenv from 'dotenv';
-import { login } from './controllers/authController';
-import financeiroRoutes from './routes/financeiroRoutes';
+import empresaRoutes from './routes/empresaRoutes';
 import freteRoutes from './routes/freteRoutes';
-import motoristaRoutes from './routes/motoristaRoutes';
 import veiculoRoutes from './routes/veiculoRoutes';
+import authRoutes from './routes/authRoutes';
 
 dotenv.config();
 
@@ -12,14 +11,11 @@ const app = express();
 
 app.use(express.json());
 
-// Rota de Autenticação
-app.post('/api/login', login);
-
-// Rotas da API
-app.use('/api/financeiro', financeiroRoutes);
+// Mapeamento das rotas da API
+app.use('/api/empresas', empresaRoutes);
 app.use('/api/fretes', freteRoutes);
-app.use('/api/motoristas', motoristaRoutes);
 app.use('/api/veiculos', veiculoRoutes);
+app.use('/api', authRoutes);
 
 const PORT = process.env.PORT || 3000;
 

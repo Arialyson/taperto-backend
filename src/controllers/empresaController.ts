@@ -1,102 +1,91 @@
 import { Request, Response } from 'express';
+import bcrypt from 'bcryptjs';
 import { pool } from '../database/db';
 
-// Criar uma nova empresa (Tenant)
+// 1. Criar Empresa
 export const criarEmpresa = async (req: Request, res: Response) => {
-  const { nome, cnpj, telefone, email, logo_url, plano } = req.body;
-
-  if (!nome || !cnpj || !email) {
-    return res.status(400).json({ erro: 'Nome, CNPJ e e-mail são obrigatórios.' });
-  }
-
   try {
-    const query = `
-      INSERT INTO empresas (nome, cnpj, telefone, email, logo_url, plano)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *;
-    `;
-    const values = [nome, cnpj, telefone, email, logo_url, plano || 'GRATUITO'];
-    const result = await pool.query(query, values);
+    const { nome, cnpj, email, senha } = req.body;
+
+    if (!nome || !cnpj || !email || !senha) {
+      return res.status(400).json({ erro: 'Nome, CNPJ, e-mail e senha são obrigatórios.' });
+    }
+
+    const senhaHash = await bcrypt.hash(senha, 10);
+
+    const result = await pool.query(
+      `INSERT INTO empresas (nome, cnpj, email, senha_hash) 
+       VALUES ($1, $2, $3, $4) 
+       RETURNING id, nome, cnpj, email`,
+      [nome, cnpj, email, senhaHash]
+    );
 
     return res.status(201).json(result.rows[0]);
   } catch (error: any) {
     if (error.code === '23505') {
-      return res.status(400).json({ erro: 'Este CNPJ já está registado.' });
+      return res.status(400).json({ erro: 'Este CNPJ ou e-mail já está cadastrado.' });
     }
-    return res.status(500).json({ erro: 'Erro ao criar empresa.', detalhe: error.message });
+    console.error('Erro ao criar empresa:', error);
+    return res.status(500).json({ erro: 'Erro interno do servidor.' });
   }
 };
 
-// Listar todas as empresas
+// 2. Listar Empresas
 export const listarEmpresas = async (req: Request, res: Response) => {
   try {
-    const result = await pool.query('SELECT * FROM empresas ORDER BY created_at DESC');
-    return res.json(result.rows);
-  } catch (error: any) {
-    return res.status(500).json({ erro: 'Erro ao listar empresas.', detalhe: error.message });
+    const result = await pool.query('SELECT id, nome, cnpj, email FROM empresas');
+    return res.status(200).json(result.rows);
+  } catch (error) {
+    console.error('Erro ao listar empresas:', error);
+    return res.status(500).json({ erro: 'Erro interno do servidor.' });
   }
 };
 
-// Obter uma empresa pelo ID
+// 3. Obter Empresa por ID
 export const obterEmpresaPorId = async (req: Request, res: Response) => {
-  const { id } = req.params;
-
   try {
-    const result = await pool.query('SELECT * FROM empresas WHERE id = $1', [id]);
-    
-    if (result.rows.length === 0) {
+    const { id } = req.params;
+    const result = await pool.query('SELECT id, nome, cnpj, email FROM empresas WHERE id = $1', [id]);
+    if (result.rowCount === 0) {
       return res.status(404).json({ erro: 'Empresa não encontrada.' });
     }
-
-    return res.json(result.rows[0]);
-  } catch (error: any) {
-    return res.status(500).json({ erro: 'Erro ao procurar empresa.', detalhe: error.message });
+    return res.status(200).json(result.rows[0]);
+  } catch (error) {
+    console.error('Erro ao obter empresa:', error);
+    return res.status(500).json({ erro: 'Erro interno do servidor.' });
   }
 };
 
-// Atualizar os dados de uma empresa
+// 4. Atualizar Empresa
 export const atualizarEmpresa = async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { nome, cnpj, telefone, email, logo_url, plano } = req.body;
-
   try {
-    const query = `
-      UPDATE empresas
-      SET nome = COALESCE($1, nome),
-          cnpj = COALESCE($2, cnpj),
-          telefone = COALESCE($3, telefone),
-          email = COALESCE($4, email),
-          logo_url = COALESCE($5, logo_url),
-          plano = COALESCE($6, plano)
-      WHERE id = $7
-      RETURNING *;
-    `;
-    const values = [nome, cnpj, telefone, email, logo_url, plano, id];
-    const result = await pool.query(query, values);
-
-    if (result.rows.length === 0) {
+    const { id } = req.params;
+    const { nome, cnpj, email } = req.body;
+    const result = await pool.query(
+      'UPDATE empresas SET nome = $1, cnpj = $2, email = $3 WHERE id = $4 RETURNING id, nome, cnpj, email',
+      [nome, cnpj, email, id]
+    );
+    if (result.rowCount === 0) {
       return res.status(404).json({ erro: 'Empresa não encontrada.' });
     }
-
-    return res.json(result.rows[0]);
-  } catch (error: any) {
-    return res.status(500).json({ erro: 'Erro ao atualizar empresa.', detalhe: error.message });
+    return res.status(200).json(result.rows[0]);
+  } catch (error) {
+    console.error('Erro ao atualizar empresa:', error);
+    return res.status(500).json({ erro: 'Erro interno do servidor.' });
   }
 };
 
-// Eliminar uma empresa
+// 5. Deletar Empresa
 export const deletarEmpresa = async (req: Request, res: Response) => {
-  const { id } = req.params;
-
   try {
-    const result = await pool.query('DELETE FROM empresas WHERE id = $1 RETURNING *', [id]);
-
-    if (result.rows.length === 0) {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM empresas WHERE id = $1 RETURNING id', [id]);
+    if (result.rowCount === 0) {
       return res.status(404).json({ erro: 'Empresa não encontrada.' });
     }
-
-    return res.json({ mensagem: 'Empresa eliminada com sucesso.' });
-  } catch (error: any) {
-    return res.status(500).json({ erro: 'Erro ao eliminar empresa.', detalhe: error.message });
+    return res.status(200).json({ mensagem: 'Empresa removida com sucesso.' });
+  } catch (error) {
+    console.error('Erro ao deletar empresa:', error);
+    return res.status(500).json({ erro: 'Erro interno do servidor.' });
   }
 };
